@@ -708,7 +708,8 @@
       var body = el('div', 'card-body');
       var nameLink = el('a', 'card-name', item.name);
       nameLink.href = item.href;
-      nameLink.download = '';
+      // Deliberately no `download` attribute: this link previews playback.
+      // Use the dedicated download button to save the file.
       nameLink.title = item.name;
       var meta = el('div', 'card-meta');
       meta.appendChild(el('span', 'badge', item.badge || label));
@@ -890,6 +891,19 @@
 
   /* --- Rendering -------------------------------------------------------- */
 
+  /* Drag a file card out to the desktop or a folder to save it, matching the
+     behaviour of the original directory listing this site grew out of. */
+  function onDragStart(e) {
+    var el = e.srcElement || e.target;
+    if (!el) return;
+    var name = (el.textContent || '').replace(':', '');
+    if (e.dataTransfer && e.dataTransfer.setData) {
+      e.dataTransfer.setData('DownloadURL',
+        'application/octet-stream:' + name + ':' + el.href);
+      e.dataTransfer.effectAllowed = 'copy';
+    }
+  }
+
   function plainCard(item) {
     var kind = kindOf(item);
     var label = KIND_LABEL[kind] || '文件';
@@ -901,10 +915,14 @@
 
     if (item.dir) {
       a.setAttribute('data-dir', 'true');
-    } else if (!item.external) {
-      // Cross-origin links ignore the download attribute, so only set it
-      // for files served from this site.
-      a.setAttribute('download', '');
+    } else {
+      // No `download` attribute here on purpose: that would force HTML pages to
+      // be saved instead of opened, and media to be saved instead of previewed.
+      // Navigation is the default action; saving is what the explicit download
+      // button (and dragging the card out) is for. Note that HTML always
+      // navigates regardless of the attribute, so it must simply be omitted.
+      a.draggable = true;
+      a.addEventListener('dragstart', onDragStart, false);
     }
     a.title = item.name + (item.dir ? '/' : '') + ' — ' + label;
     setHtml(a, iconMarkup(kind));
