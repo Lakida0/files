@@ -85,6 +85,7 @@
   }
 
   #visualizer_wrapper {
+    position: relative;   /* anchors the floating scale switch */
     margin-top: 16px;
     border-radius: var(--radius);
     background: #17150f;
@@ -93,9 +94,46 @@
 
   #canvas {
     display: block;
-    width: 100%;
-    height: auto;
-    aspect-ratio: 800 / 350;
+    /* Both axes are set from JS to fixed pixel sizes so the drawing buffer can
+       scale with devicePixelRatio without the element changing size. A CSS
+       width here would fight those inline styles. */
+    max-width: 100%;
+  }
+
+  /* Scale switch, floated over the top-right of the spectrum. */
+  .viz-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1;
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+  }
+
+  .viz-controls button {
+    padding: 4px 11px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.72);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .viz-controls button:hover {
+    color: #fff;
+  }
+
+  .viz-controls button[aria-pressed="true"] {
+    background: rgba(255, 255, 255, 0.92);
+    color: #14120c;
   }
 
   .viz-tip {
@@ -131,6 +169,10 @@
     </div>
 
     <div id="visualizer_wrapper">
+      <div class="viz-controls" role="group" aria-label="频率刻度">
+        <button type="button" data-scale="log" aria-pressed="true" title="对数刻度：更接近人耳听感">对数</button>
+        <button type="button" data-scale="linear" aria-pressed="false" title="线性刻度：每根柱子覆盖相同带宽">线性</button>
+      </div>
       <canvas id="canvas" width="800" height="350"></canvas>
     </div>
 
@@ -167,21 +209,26 @@ var Visualizer = function() {
     this.status = 0, //flag for sound is playing 1 or stopped 0
     this.forceStop = false,
     this.allCapsReachBottom = false,
-    this.meterWidth = 10, //width of the meters in the spectrum
-    this.gap = 2, //gap between meters
     this.capHeight = 2,
     this.capYPositionArray = [],
     this.cssWidth = 800,
     this.cssHeight = 350,
     this.resizeTimer = null,
-    //Frequency window the spectrum covers. Music carries almost all of its
-    //energy between roughly 100 Hz and 6 kHz, so spanning the full 0-22 kHz
-    //range (with its empty DC and near-Nyquist ends) leaves the right-hand
-    //half of the display permanently flat.
-    this.freqMin = 30,
-    this.freqMax = 16000,
+    //Full audible range. Clamped to the context's Nyquist limit at build time.
+    this.freqMin = 20,
+    this.freqMax = 20000,
+    //'log' (default) or 'linear'; switchable from the UI.
+    this.freqScale = 'log',
+    //Layout, in CSS pixels, scaled by devicePixelRatio when measuring.
+    this.targetBarCss = 9,   //desired bar width; the count follows from this
+    this.gapRatio = 0.16,    //gap as a fraction of the bar pitch
+    //Height-to-width ratio, used as `height = width * aspectRatio`.
+    this.aspectRatio = 350 / 800,
+    this.meterWidth = 10,    //recomputed on every measure
+    this.gap = 2,            //recomputed on every measure
     this.bands = null, //cached bin ranges, keyed by meter count
-    this.bandsForMeterNum = 0
+    this.bandsForMeterNum = 0,
+    this.resizeObserver = null
 };
 Visualizer.prototype = {
     ini: function() {
@@ -199,6 +246,10 @@ Visualizer.prototype = {
                 that._resizeCanvas();
             }, 150);
         }, false);
+
+        //Also follow the container itself, which can change without a window
+        //resize (scrollbar appearing, mobile browser chrome, zoom).
+        this._observeResize();
     },
     _prepareAPI: function() {
         //fix browser vender for AudioContext and requestAnimationFrame
@@ -213,66 +264,163 @@ Visualizer.prototype = {
         }
     },
     _resizeCanvas: function() {
-        //Size the canvas backing store to the displayed size so the spectrum
-        //stays sharp and fills the panel at any viewport width.
+        //Measure the container, not the canvas: the canvas is sized from this
+        //value, so reading it back would keep a stale width alive forever.
         var canvas = document.getElementById('canvas');
         if (!canvas) {
             return;
         }
-        var rect = canvas.getBoundingClientRect();
-        var width = Math.max(320, Math.round(rect.width || 800));
-        var height = Math.round(width * 350 / 800);
+        var host = canvas.parentNode || canvas;
+        var box = host.getBoundingClientRect();
+        //Fall back to the canvas or the default if the host is not laid out.
+        var availCss = Math.round(box.width || canvas.getBoundingClientRect().width || 800);
+        var width = Math.max(240, availCss);
+        var height = Math.round(width * this.aspectRatio);
         var dpr = Math.min(window.devicePixelRatio || 1, 2);
 
         this.cssWidth = width;
         this.cssHeight = height;
+        //`canvas.width`/`height` are the BACKING STORE in device pixels, and they
+        //also act as the element's intrinsic size. They must therefore be pinned
+        //back to CSS pixels here, or the canvas displays at dpr times too large
+        //(a 150% Windows display would render it 2.5x oversized).
         canvas.width = Math.round(width * dpr);
         canvas.height = Math.round(height * dpr);
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
 
-        //How many meters fit at the current width, preserving the original look.
-        this.meterNum = Math.max(8, Math.round(width / (this.meterWidth + this.gap)));
+        //Lay the meters out so the row ends exactly on the right edge with no
+        //blank strip. Each meter advances by (bar + gap), so for N meters to
+        //fill the width the bar width is (cw / N) - gap: the final meter's
+        //trailing gap falls on the edge and costs nothing.
+        var cw = canvas.width;
+        var gapPx = Math.max(1, Math.round(this.targetBarCss * this.gapRatio * dpr));
+        var targetPitch = Math.max(gapPx + 2, this.targetBarCss * dpr);
+        var meterNum = Math.max(8, Math.min(400, Math.round(cw / targetPitch)));
+
+        this.meterNum = meterNum;
+        this.gap = gapPx;
+        this.meterWidth = Math.max(1, cw / meterNum - gapPx);
         //Peak-hold state is per meter, so it must be rebuilt on resize or the
         //two fall out of sync and the caps get drawn at the wrong heights.
         this.capYPositionArray = [];
         this.bands = null;
         this.bandsForMeterNum = 0;
+        //The cached gradient is tied to the old drawing height.
+        this._gradient = null;
+        this._gradientHeight = 0;
+    },
+    //Watch the canvas container so layout changes that are not window resizes
+    //(scrollbar appearing, mobile viewport chrome, parent flex changes) are
+    //picked up too.
+    _observeResize: function() {
+        if (typeof ResizeObserver !== 'function') {
+            return;
+        }
+        var canvas = document.getElementById('canvas');
+        var host = canvas && (canvas.parentNode || canvas);
+        if (!host) {
+            return;
+        }
+        var that = this;
+        this.resizeObserver = new ResizeObserver(function() {
+            if (that.resizeTimer !== null) {
+                clearTimeout(that.resizeTimer);
+            }
+            that.resizeTimer = setTimeout(function() {
+                that._resizeCanvas();
+            }, 100);
+        });
+        this.resizeObserver.observe(host);
     },
     //Map a frequency to an FFT bin index.
     _freqToBin: function(freq, sampleRate, binCount) {
         var bin = Math.round(freq / (sampleRate / 2) * binCount);
         return Math.min(binCount - 1, Math.max(0, bin));
     },
-    //Build the bin range each meter covers, spaced logarithmically so the
-    //display matches how we actually hear and uses the whole width.
+    //Build the bin range each meter covers for the active frequency scale.
+    //Log spacing matches how we hear and puts most of the width where music
+    //lives; linear spacing puts equal hertz in every meter, which is what a
+    //technical analyser shows.
     _buildBands: function(analyser, meterNum) {
         var ctxRef = this.audioContext || analyser.context;
         var sampleRate = ctxRef ? ctxRef.sampleRate : 44100;
         var binCount = analyser.frequencyBinCount;
         var nyquist = sampleRate / 2;
-        var fMin = this.freqMin;
+        //Ask for 20 Hz - 20 kHz, but never above what this context can represent
+        //(a 32 kHz context tops out at 16 kHz, an 8 kHz one at 4 kHz).
+        var fMin = Math.max(1, Math.min(this.freqMin, nyquist));
         var fMax = Math.min(this.freqMax, nyquist);
+        if (fMax <= fMin) fMax = nyquist;
+        var isLog = this.freqScale !== 'linear';
 
         var bands = new Array(meterNum);
         var logMin = Math.log(fMin);
         var logSpan = Math.log(fMax) - logMin;
+        var linSpan = fMax - fMin;
+        var prevHi = 0;
         for (var i = 0; i < meterNum; i++) {
+            var fLo, fHi;
+            if (isLog) {
+                fLo = Math.exp(logMin + logSpan * i / meterNum);
+                fHi = Math.exp(logMin + logSpan * (i + 1) / meterNum);
+            } else {
+                fLo = fMin + linSpan * i / meterNum;
+                fHi = fMin + linSpan * (i + 1) / meterNum;
+            }
             //Every meter gets at least one bin, otherwise the highest meter
             //would wrap around and read the bass.
-            var lo = this._freqToBin(Math.exp(logMin + logSpan * i / meterNum),
-                                     sampleRate, binCount);
-            var hi = this._freqToBin(Math.exp(logMin + logSpan * (i + 1) / meterNum),
-                                     sampleRate, binCount);
+            var lo = this._freqToBin(fLo, sampleRate, binCount);
+            var hi = this._freqToBin(fHi, sampleRate, binCount);
             if (hi <= lo) hi = Math.min(binCount - 1, lo + 1);
+            //Rounding to bin boundaries can make a band a bin narrower than the
+            //one below it, which shows up as a bar that never quite reaches its
+            //neighbour. Keep the widths non-decreasing instead.
+            if (hi < prevHi) hi = Math.min(binCount, prevHi);
+            prevHi = hi;
             bands[i] = { lo: lo, hi: hi };
         }
+        //Pin the ends so the display provably spans the whole window: rounding
+        //to bin boundaries can otherwise leave the top band short of fMax,
+        //wasting the rightmost few percent of the width.
+        bands[0].lo = Math.min(bands[0].lo, this._freqToBin(fMin, sampleRate, binCount));
+        bands[meterNum - 1].hi = Math.max(
+            bands[meterNum - 1].hi, this._freqToBin(fMax, sampleRate, binCount));
+        //The last band is exclusive, so make sure it can reach the final bin.
+        bands[meterNum - 1].hi = Math.min(binCount, Math.max(bands[meterNum - 1].hi + 1,
+                                                            bands[meterNum - 1].lo + 1));
         this.bands = bands;
         this.bandsForMeterNum = meterNum;
+        //Report the window actually in use, after Nyquist clamping.
+        this.bandFMin = fMin;
+        this.bandFMax = fMax;
         return bands;
+    },
+    //Switch between the logarithmic and linear frequency scale.
+    setScale: function(scale) {
+        this.freqScale = scale === 'linear' ? 'linear' : 'log';
+        //Force the mapping to be rebuilt on the next frame.
+        this.bands = null;
+        this.bandsForMeterNum = 0;
+        this.capYPositionArray = [];
+        return this.freqScale;
     },
     _addEventListner: function() {
         var that = this,
             audioInput = document.getElementById('uploadedFile'),
             dropContainer = document.getElementsByTagName("canvas")[0];
+        //Frequency scale switch: log (default) or linear.
+        var scaleButtons = document.querySelectorAll('[data-scale]');
+        for (var s = 0; s < scaleButtons.length; s++) {
+            scaleButtons[s].addEventListener('click', function() {
+                var scale = this.getAttribute('data-scale');
+                that.setScale(scale);
+                for (var k = 0; k < scaleButtons.length; k++) {
+                    var isActive = scaleButtons[k].getAttribute('data-scale') === that.freqScale;
+                    scaleButtons[k].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                }
+            }, false);
+        }
         //listen the file upload
         audioInput.onchange = function() {
             if (that.audioContext===null) {return;};
@@ -385,23 +533,27 @@ Visualizer.prototype = {
         document.getElementById('fileWrapper').style.opacity = 0.2;
         this._drawSpectrum(analyser);
     },
+    //Paint the peak-hold caps and bars. The spectrum is drawn with a bottom-to-top
+    //green/yellow/red gradient, cached until the canvas height changes.
+    _ensureGradient: function(ctx, height) {
+        if (this._gradient && this._gradientHeight === height) {
+            return this._gradient;
+        }
+        var gradient = ctx.createLinearGradient(0, height, 0, 0);
+        gradient.addColorStop(0, '#0f0');
+        gradient.addColorStop(0.5, '#ff0');
+        gradient.addColorStop(1, '#f00');
+        this._gradient = gradient;
+        this._gradientHeight = height;
+        return gradient;
+    },
     _drawSpectrum: function(analyser) {
         var that = this,
             canvas = document.getElementById('canvas'),
             ctx = canvas.getContext('2d'),
-            cwidth = canvas.width,
-            cheight = canvas.height - 2,
-            meterWidth = this.meterWidth,
-            gap = this.gap,
             capHeight = this.capHeight,
             capStyle = '#fff',
-            meterNum = this.meterNum,
-            capYPositionArray = this.capYPositionArray,
-            //Scale across the real drawing height, not a hardcoded 300px.
-            gradient = ctx.createLinearGradient(0, cheight, 0, 0);
-        gradient.addColorStop(0, '#0f0');
-        gradient.addColorStop(0.5, '#ff0');
-        gradient.addColorStop(1, '#f00');
+            capYPositionArray = this.capYPositionArray;
 
         var drawMeter = function() {
             var array = new Uint8Array(analyser.frequencyBinCount);
@@ -424,9 +576,13 @@ Visualizer.prototype = {
                     return;
                 };
             };
-            //Read meter count and cache fresh each frame: a resize can change
-            //them while the animation is running.
+            //Read the layout and canvas size fresh each frame, because a
+            //re-measure can land while the animation is running.
+            var meterWidth = that.meterWidth;
+            var gap = that.gap;
             var meterNum = that.meterNum;
+            var cwidth = canvas.width;
+            var cheight = canvas.height - 2;
             var bands = that.bands;
             if (!bands || that.bandsForMeterNum !== meterNum) {
                 bands = that._buildBands(analyser, meterNum);
@@ -437,6 +593,7 @@ Visualizer.prototype = {
                 }
             }
             var drawWidth = meterWidth + gap;
+            var gradient = that._ensureGradient(ctx, cheight);
             ctx.clearRect(0, 0, cwidth, cheight);
             for (var i = 0; i < meterNum; i++) {
                 //Take the strongest bin in this band rather than a single
