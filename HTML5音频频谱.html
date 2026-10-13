@@ -594,6 +594,11 @@ Visualizer.prototype = {
             }
             var drawWidth = meterWidth + gap;
             var gradient = that._ensureGradient(ctx, cheight);
+            //getByteFrequencyData returns 0-255, but a bar of 255 only fills
+            //255 of cheight pixels, so the top of the canvas could never light
+            //up and the red end of the gradient was unreachable. Stretch the
+            //full byte range across the drawing height instead.
+            var barScale = cheight / 255;
             ctx.clearRect(0, 0, cwidth, cheight);
             for (var i = 0; i < meterNum; i++) {
                 //Take the strongest bin in this band rather than a single
@@ -604,16 +609,23 @@ Visualizer.prototype = {
                     if (array[b] > value) value = array[b];
                 }
                 var x = i * drawWidth;
+                //Scale the raw byte into drawing pixels. The cap keeps holding
+                //the raw 0-255 value so its decay stays a clean one-per-frame.
+                var barHeight = Math.min(cheight, value * barScale);
                 ctx.fillStyle = capStyle;
                 //draw the cap, with transition effect
                 if (value < capYPositionArray[i]) {
-                    ctx.fillRect(x, cheight - (--capYPositionArray[i]), meterWidth, capHeight);
+                  //Decay one raw step, then scale; pre-decrement would return
+                  //the pre-decay value and misfire the scaling.
+                    var decayed = capYPositionArray[i] - 1;
+                    capYPositionArray[i] = decayed;
+                    ctx.fillRect(x, cheight - decayed * barScale, meterWidth, capHeight);
                 } else {
-                    ctx.fillRect(x, cheight - value, meterWidth, capHeight);
+                    ctx.fillRect(x, cheight - barHeight, meterWidth, capHeight);
                     capYPositionArray[i] = value;
                 };
                 ctx.fillStyle = gradient; //set the fillStyle to gradient for a better look
-                ctx.fillRect(x /*meterWidth+gap*/ , cheight - value + capHeight, meterWidth, cheight); //the meter
+                ctx.fillRect(x /*meterWidth+gap*/ , cheight - barHeight + capHeight, meterWidth, cheight); //the meter
             }
             that.animationId = requestAnimationFrame(drawMeter);
         }
