@@ -173,7 +173,15 @@ var Visualizer = function() {
     this.capYPositionArray = [],
     this.cssWidth = 800,
     this.cssHeight = 350,
-    this.resizeTimer = null
+    this.resizeTimer = null,
+    //Frequency window the spectrum covers. Music carries almost all of its
+    //energy between roughly 100 Hz and 6 kHz, so spanning the full 0-22 kHz
+    //range (with its empty DC and near-Nyquist ends) leaves the right-hand
+    //half of the display permanently flat.
+    this.freqMin = 30,
+    this.freqMax = 16000,
+    this.bands = null, //cached bin ranges, keyed by meter count
+    this.bandsForMeterNum = 0
 };
 Visualizer.prototype = {
     ini: function() {
@@ -223,7 +231,43 @@ Visualizer.prototype = {
 
         //How many meters fit at the current width, preserving the original look.
         this.meterNum = Math.max(8, Math.round(width / (this.meterWidth + this.gap)));
+        //Peak-hold state is per meter, so it must be rebuilt on resize or the
+        //two fall out of sync and the caps get drawn at the wrong heights.
         this.capYPositionArray = [];
+        this.bands = null;
+        this.bandsForMeterNum = 0;
+    },
+    //Map a frequency to an FFT bin index.
+    _freqToBin: function(freq, sampleRate, binCount) {
+        var bin = Math.round(freq / (sampleRate / 2) * binCount);
+        return Math.min(binCount - 1, Math.max(0, bin));
+    },
+    //Build the bin range each meter covers, spaced logarithmically so the
+    //display matches how we actually hear and uses the whole width.
+    _buildBands: function(analyser, meterNum) {
+        var ctxRef = this.audioContext || analyser.context;
+        var sampleRate = ctxRef ? ctxRef.sampleRate : 44100;
+        var binCount = analyser.frequencyBinCount;
+        var nyquist = sampleRate / 2;
+        var fMin = this.freqMin;
+        var fMax = Math.min(this.freqMax, nyquist);
+
+        var bands = new Array(meterNum);
+        var logMin = Math.log(fMin);
+        var logSpan = Math.log(fMax) - logMin;
+        for (var i = 0; i < meterNum; i++) {
+            //Every meter gets at least one bin, otherwise the highest meter
+            //would wrap around and read the bass.
+            var lo = this._freqToBin(Math.exp(logMin + logSpan * i / meterNum),
+                                     sampleRate, binCount);
+            var hi = this._freqToBin(Math.exp(logMin + logSpan * (i + 1) / meterNum),
+                                     sampleRate, binCount);
+            if (hi <= lo) hi = Math.min(binCount - 1, lo + 1);
+            bands[i] = { lo: lo, hi: hi };
+        }
+        this.bands = bands;
+        this.bandsForMeterNum = meterNum;
+        return bands;
     },
     _addEventListner: function() {
         var that = this,
@@ -353,6 +397,7 @@ Visualizer.prototype = {
             capStyle = '#fff',
             meterNum = this.meterNum,
             capYPositionArray = this.capYPositionArray,
+            //Scale across the real drawing height, not a hardcoded 300px.
             gradient = ctx.createLinearGradient(0, cheight, 0, 0);
         gradient.addColorStop(0, '#0f0');
         gradient.addColorStop(0.5, '#ff0');
@@ -372,18 +417,35 @@ Visualizer.prototype = {
                     allCapsReachBottom = allCapsReachBottom && (capYPositionArray[i] === 0);
                 };
                 if (allCapsReachBottom) {
+                    //Trim in case a resize grew the array, so the next track
+                    //starts from a matching length.
+                    capYPositionArray.length = Math.min(capYPositionArray.length, that.meterNum);
                     cancelAnimationFrame(that.animationId); //since the sound is top and animation finished, stop the requestAnimation to prevent potential memory leak,THIS IS VERY IMPORTANT!
                     return;
                 };
             };
-            var step = Math.round(array.length / meterNum); //sample limited data from the total array
+            //Read meter count and cache fresh each frame: a resize can change
+            //them while the animation is running.
+            var meterNum = that.meterNum;
+            var bands = that.bands;
+            if (!bands || that.bandsForMeterNum !== meterNum) {
+                bands = that._buildBands(analyser, meterNum);
+            }
+            if (capYPositionArray.length < meterNum) {
+                for (var c = capYPositionArray.length; c < meterNum; c++) {
+                    capYPositionArray.push(0);
+                }
+            }
             var drawWidth = meterWidth + gap;
             ctx.clearRect(0, 0, cwidth, cheight);
             for (var i = 0; i < meterNum; i++) {
-                var value = array[i * step];
-                if (capYPositionArray.length < Math.round(meterNum)) {
-                    capYPositionArray.push(value);
-                };
+                //Take the strongest bin in this band rather than a single
+                //sampled bin, so narrow peaks are not missed between samples.
+                var band = bands[i];
+                var value = 0;
+                for (var b = band.lo; b < band.hi; b++) {
+                    if (array[b] > value) value = array[b];
+                }
                 var x = i * drawWidth;
                 ctx.fillStyle = capStyle;
                 //draw the cap, with transition effect
