@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN" dir="ltr">
+
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="一些零星文件的集合，方便直接下载与在线播放。">
+<meta name="google" value="notranslate">
+<link rel="shortcut icon" href="./favicon.ico">
+<link rel="stylesheet" href="./assets/site.css">
+<title>一些文件 · 文件索引</title>
+</head>
+
+<body>
+
+<div class="shell">
+
+  <nav class="crumbs" aria-label="面包屑导航">
+    <ol>
+      <li><a href="./">🏠 首页</a></li>
+      <li aria-current="page">一些文件</li>
+    </ol>
+  </nav>
+
+  <header class="page-head">
+    <div>
+      <h1 class="page-title" id="page-title"><span class="glyph">🗂️</span>一些文件</h1>
+      <p class="page-sub">
+        通过 Cloudflare Pages 提供 CDN，单个文件不超过 25&nbsp;MB；高清视频使用 HLS 流式播放。
+      </p>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M16.5 16.5L21 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <input type="search" id="search" placeholder="搜索文件与文件夹…（按 / 聚焦）"
+             autocomplete="off" spellcheck="false" aria-label="搜索文件与文件夹">
+      <button type="button" class="clear" title="清除" aria-label="清除搜索">×</button>
+    </div>
+
+    <div class="seg" role="group" aria-label="排序方式">
+      <button type="button" data-sort="default" aria-pressed="true">默认</button>
+      <button type="button" data-sort="name" aria-pressed="false">名称<span class="dir-arrow">↑</span></button>
+      <button type="button" data-sort="size" aria-pressed="false">大小<span class="dir-arrow">↑</span></button>
+      <button type="button" data-sort="date" aria-pressed="false">日期<span class="dir-arrow">↑</span></button>
+    </div>
+
+    <span class="count" id="count" aria-live="polite"></span>
+  </div>
+
+  <ul class="grid" id="grid"></ul>
+
+  <div class="empty" id="empty">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>
+    </svg>
+    <p>没有匹配 <strong data-query></strong> 的项目。</p>
+  </div>
+
+  <footer class="site-foot">
+    <span>© <span id="year">2024</span> Lakida · 一些文件</span>
+    <span class="foot-links">
+      <a href="./README.md">README</a>
+      <a href="./LICENSE">Apache-2.0 License</a>
+      <a href="https://github.com/Lakida0/files">GitHub</a>
+    </span>
+  </footer>
+
+</div>
+
+<script src="./assets/site.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+DirectoryListing.init({
+  base: '',
+  title: '一些文件 · 文件索引',
+  items: [
+    // --- 音频 / 数据 ---------------------------------------------------
+    { name: 'music',     dir: true, badge: '音乐', mtime: 1649398756 },
+    { name: 'nbs',       dir: true, badge: '音符', mtime: 1649397823 },
+
+    // --- 演示 / 代码 ---------------------------------------------------
+    { name: 'Crab_Rave', dir: true, badge: '视频', mtime: 1676644703 },
+    { name: 'WebGL_Demo',dir: true, badge: '代码', mtime: 1676794369 },
+
+    // --- 视频合辑 ------------------------------------------------------
+    { name: '梦想季',    dir: true, badge: '视频', mtime: 1665907292 },
+    { name: '小王子季',  dir: true, badge: '视频', mtime: 1665905082 },
+    { name: '学习资料',  dir: true, badge: '视频', mtime: 1662458905 },
+
+    // --- 作品 / 工具 ---------------------------------------------------
+    { name: '小体积编程大赛优秀作品', dir: true, badge: '压缩包', mtime: 1655221446 },
+    { name: 'HTML5音频频谱.html', badge: '网页', size: 15249, mtime: 1679104542 },
+
+    // --- 站点文件 ------------------------------------------------------
+    { name: 'README.md', badge: '文档', size: 762,   mtime: 1720936393 },
+    { name: 'LICENSE',   badge: '文档', size: 11357, mtime: 1720936393 },
+    { name: 'favicon.ico', badge: '图片', size: 187198, mtime: 1720936394 }
+  ]
+});
+</script>
+
+</body>
+</html>

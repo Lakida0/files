@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN" dir="ltr">
+
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="一些文件 · music 目录，共 12 首音乐。">
+<meta name="google" value="notranslate">
+<link rel="shortcut icon" href="../favicon.ico">
+<link rel="stylesheet" href="../assets/site.css">
+<title>music · 一些文件</title>
+</head>
+
+<body>
+
+<div class="shell">
+
+  <nav class="crumbs" aria-label="面包屑导航">
+    <ol>
+      <li><a href="../">🏠 首页</a></li>
+      <li aria-current="page">music</li>
+    </ol>
+  </nav>
+
+  <header class="page-head">
+    <div>
+      <h1 class="page-title" id="page-title"><span class="glyph">🎵</span>music</h1>
+      <p class="page-sub">12 首音乐 · MP3 与 FLAC · 点击播放按钮在线试听，点击 <span aria-hidden="true">⤓</span> 下载原文件</p>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M16.5 16.5L21 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <input type="search" id="search" placeholder="搜索音乐…（按 / 聚焦）"
+             autocomplete="off" spellcheck="false" aria-label="搜索音乐">
+      <button type="button" class="clear" title="清除" aria-label="清除搜索">×</button>
+    </div>
+
+    <div class="seg" role="group" aria-label="排序方式">
+      <button type="button" data-sort="default" aria-pressed="true">默认</button>
+      <button type="button" data-sort="name" aria-pressed="false">名称<span class="dir-arrow">↑</span></button>
+      <button type="button" data-sort="size" aria-pressed="false">大小<span class="dir-arrow">↑</span></button>
+      <button type="button" data-sort="date" aria-pressed="false">日期<span class="dir-arrow">↑</span></button>
+    </div>
+
+    <span class="count" id="count" aria-live="polite"></span>
+  </div>
+
+  <ul class="grid" id="grid"></ul>
+
+  <div class="empty" id="empty">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>
+    </svg>
+    <p>没有匹配 <strong data-query></strong> 的音乐。</p>
+  </div>
+
+  <footer class="site-foot">
+    <span>© <span id="year">2024</span> Lakida · 一些文件</span>
+    <span class="foot-links">
+      <a href="../">返回首页</a>
+      <a href="../LICENSE">Apache-2.0 License</a>
+    </span>
+  </footer>
+
+</div>
+
+<script src="../assets/site.js"></script>
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+
+DirectoryListing.init({
+  base: '',
+  title: 'music · 一些文件',
+  audio: true,
+  items: [
+    { name: 'Blinding Lights.flac', size: 23933706, mtime: 1648204400 },
+    { name: 'C418 - stranger_think.flac', size: 26005572, mtime: 1626426973 },
+    { name: 'Clear Day.mp3', size: 10792947, mtime: 1649401807, badge: 'CD 翻录' },
+    { name: 'Hard Bass School - Наш гимн.mp3', size: 8682186, mtime: 1578659018, badge: '低音' },
+    { name: 'Headphone Activist - Cloud City.mp3', size: 12281510, mtime: 1571889495, badge: '低音' },
+    { name: 'Idina Menzel - Let It Go.flac', size: 23925206, mtime: 1617341700 },
+    { name: 'Queen - Another One Bites the Dust.mp3', size: 8779750, mtime: 1644463418 },
+    { name: "Queen - Don't Stop Me Now.flac", size: 24364540, mtime: 1648738288 },
+    { name: 'Rick Astley - Never Gonna Give You Up.mp3', size: 9047552, mtime: 1649401944 },
+    { name: 'Shakira - Try Everything.flac', size: 23729212, mtime: 1617412619 },
+    { name: 'Year Three, Class Two.mp3', size: 11218238, mtime: 1649401933, badge: 'CD 翻录' },
+    { name: 'Zabo - Drown.flac', size: 19538604, mtime: 1573783495, badge: '低音' }
+  ]
+});
+</script>
+
+</body>
+</html>

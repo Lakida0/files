@@ -1,0 +1,84 @@
+# Cloudflare Pages caching rules.
+#
+# Goal: shared assets are fetched once and then come from the browser cache,
+# while every HTML page can still pick up a new deploy.
+#
+# Pages applies rules in order and the LAST match wins, so the broad default
+# comes first, directory rules follow, and the HTML revalidation rules come
+# last so they cannot be shadowed by a longer cache on their directory.
+
+# --- Default: revalidate ---------------------------------------------------
+/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+# --- Long-lived static assets ---------------------------------------------
+# hls.js, site.css and site.js only change with a deploy, and every Pages
+# deploy gets its own URL, so a long lifetime is safe.
+# NOTE: if you edit assets/site.css or assets/site.js in place and the change
+# seems not to appear, bump the ?v= query on the <link>/<script> tags in the
+# HTML, otherwise this year-long cache keeps serving the old file.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/favicon.ico
+  Cache-Control: public, max-age=604800
+
+# --- Streaming -------------------------------------------------------------
+# Playlists are small and must never be stale, otherwise seeking breaks.
+/**/*.m3u8
+  Cache-Control: public, max-age=60
+
+# Segments are immutable: a segment name is never reused.
+/Crab_Rave/stream/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/梦想季/stream/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/小王子季/stream/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/学习资料/stream/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# --- Media files -----------------------------------------------------------
+# Long-lived but deliberately not "immutable", because a track could be
+# re-encoded in place and keep its name.
+/music/*
+  Cache-Control: public, max-age=2592000
+
+# --- HTML revalidation -----------------------------------------------------
+# These must stay after the directory rules above so the last match wins.
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/music/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/nbs/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/Crab_Rave/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/WebGL_Demo/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/WebGL_Demo/*/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/梦想季/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/小王子季/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/学习资料/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/小体积编程大赛优秀作品/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# --- Plain-text project files ---------------------------------------------
+/README.md
+  Cache-Control: public, max-age=3600

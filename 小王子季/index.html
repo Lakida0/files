@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN" dir="ltr">
+
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="光遇小王子季结束动画，使用 Switch 录制，HLS 在线播放。">
+<meta name="google" value="notranslate">
+<link rel="shortcut icon" href="../favicon.ico">
+<link rel="stylesheet" href="../assets/site.css">
+<title>光遇小王子季结束动画</title>
+</head>
+
+<body>
+
+<main class="player-page">
+
+  <div class="player-head">
+    <h1>光遇小王子季结束动画</h1>
+    <p class="player-sub">使用 Switch 录制</p>
+  </div>
+
+  <div class="player-frame">
+    <video id="video" controls playsinline preload="metadata" poster="./init.mp4"></video>
+  </div>
+
+  <p class="player-status" id="status" role="status" aria-live="polite"></p>
+
+  <nav>
+    <a class="back-link" href="../">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      返回首页
+    </a>
+  </nav>
+
+</main>
+
+<!-- hls.js is always served from this site's own assets/ directory, so playback
+     never depends on a third-party CDN being reachable. -->
+<link rel="preload" as="script" href="../assets/hls.min.js">
+<script src="../assets/hls.min.js"></script>
+<script>
+(function () {
+  var video = document.getElementById('video');
+  var status = document.getElementById('status');
+
+  var source = 'le.m3u8';
+
+  function say(message, isError) {
+    status.textContent = message || '';
+    status.classList.toggle('is-error', !!isError);
+  }
+
+  function showDirectLink(message) {
+    say('', true);
+    status.textContent = '';
+    var link = document.createElement('a');
+    link.href = source;
+    link.textContent = message;
+    status.appendChild(link);
+  }
+
+  if (!window.Hls) {
+    // The local copy did not load: say so instead of silently reaching for a CDN.
+    say('', true);
+    status.textContent = '';
+    status.appendChild(document.createTextNode(
+      '播放器脚本 assets/hls.min.js 未能加载（请确认该文件存在且路径正确）。'));
+    var fallback = document.createElement('a');
+    fallback.href = source;
+    fallback.textContent = '直接打开媒体文件 →';
+    status.appendChild(document.createTextNode(' '));
+    status.appendChild(fallback);
+    return;
+  }
+
+  var Hls = window.Hls;
+
+  if (Hls.isSupported()) {
+    var hls = new Hls({
+      maxBufferLength: 30,
+      enableWorker: true
+    });
+
+    hls.on(Hls.Events.MANIFEST_PARSED, function () {
+      say('');
+    });
+
+    hls.on(Hls.Events.ERROR, function (event, data) {
+      if (!data.fatal) return;
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        say('网络错误，正在重试…', true);
+        hls.startLoad();
+      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        say('解码错误，正在恢复…', true);
+        hls.recoverMediaError();
+      } else {
+        hls.destroy();
+        showDirectLink('播放失败，请点击此处直接打开媒体文件。');
+      }
+    });
+
+    hls.loadSource(source);
+    hls.attachMedia(video);
+    return;
+  }
+
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = source;
+    return;
+  }
+
+  showDirectLink('当前浏览器不支持 HLS 播放，请点击此处直接打开媒体文件。');
+})();
+</script>
+
+</body>
+</html>

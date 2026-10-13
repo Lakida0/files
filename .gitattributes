@@ -1,0 +1,37 @@
+# Media and other binaries: never apply line-ending conversion, never attempt
+# to diff them as text. These are the bulk of the repository, so keeping Git's
+# filters away from them also avoids accidental corruption.
+*.flac  binary
+*.mp3   binary
+*.wav   binary
+*.ogg   binary
+*.m4a   binary
+*.mp4   binary
+*.m4s   binary
+*.ts    binary
+*.m3u8  text eol=lf
+*.ico   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.zip   binary
+*.7z    binary
+*.nbs   binary
+*.map   -diff -merge
+
+# Text sources: normalise to LF in the repository.
+*.html  text
+*.css   text
+*.js    text
+*.md    text
+*.json  text
+LICENSE text
+
+# Keep GitHub's language statistics about the site, not the media files.
+music/*        linguist-vendored
+*/stream/*      linguist-vendored
+*.flac          linguist-vendored
+*.mp3           linguist-vendored
+*.m4s           linguist-vendored
+assets/hls.min.js      linguist-vendored
+assets/hls.min.js.map  linguist-vendored

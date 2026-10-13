@@ -1,0 +1,24 @@
+# --- Editor / OS junk -----------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# --- Generic build & dependency output ------------------------------------
+node_modules/
+.cache/
+.vscode/
+_site/
+
+# --- Temporary working files ---------------------------------------------
+# Scratch directories and files created while experimenting. Media files are
+# deliberately NOT ignored: Cloudflare Pages serves them, so they must be
+# committed.
+.tmp/
+.tmp-*/
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
