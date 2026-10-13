@@ -71,6 +71,33 @@
 | `title` | 设置 `document.title`，并填入空的 `#page-title` |
 | `audio` | `true` 时给每个音频卡片加上内嵌播放器（music 页面使用） |
 
+## 修改 assets 后请升版本号
+
+`_headers` 给 `/assets/*` 设的是 **`max-age=86400`（一天）**，不是 `immutable`。
+
+> 历史：这里原本是 `max-age=31536000, immutable`。对原地修改的文件来说那是个陷阱 —— 浏览器会彻底停止请求，于是新 HTML 已经上线、旧的 `site.js` 却还在缓存里跑（曾导致首页的 html 卡片点击变成下载）。改成一天后，即使忘记升版本号，最多也只会陈旧一天。
+
+推荐做法仍是每次改动 `assets/site.js` 或 `assets/site.css` 后递增引用版本号，让访客立即拿到新文件：
+
+```html
+<link rel="stylesheet" href="./assets/site.css?v=20261013">
+<script src="./assets/site.js?v=20261013"></script>
+```
+
+当前版本号：**`20261013`**（日期形式即可，只要每次改动都不同）。涉及 9 个页面：
+
+```
+index.html                        HTML5音频频谱.html
+music/index.html                  nbs/index.html
+小体积编程大赛优秀作品/index.html     WebGL_Demo/index.html
+WebGL_Demo/condition/index.html   WebGL_Demo/type/index.html
+WebGL_Demo/until/index.html
+```
+
+HTML 页面自身设的是 `max-age=0, must-revalidate`，所以**改 HTML 不需要**动版本号，正常重新部署即可生效。
+
+> `hls.min.js` 没有加版本串（它只在升级依赖时才会变），若哪天需要立即刷新它，按同样方式加 `?v=`；否则一天内也会自然更新。
+
 ## 更新 hls.js
 
 播放器脚本**只从本站 `assets/` 目录加载**，不依赖任何第三方 CDN，因此 CDN 不可达时也不会影响播放。

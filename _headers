@@ -11,15 +11,17 @@
 /*
   Cache-Control: public, max-age=0, must-revalidate
 
-# --- Long-lived static assets ---------------------------------------------
-# hls.js, site.css and site.js only change with a deploy, and every Pages
-# deploy gets its own URL, so a long lifetime is safe.
-# NOTE: if you edit assets/site.css or assets/site.js in place and the change
-# seems not to appear, bump the ?v= query on the <link>/<script> tags in the
-# HTML, otherwise this year-long cache keeps serving the old file.
+# --- Shared assets: cached for a day, with a version-string safety net -----
+# history: this was `max-age=31536000, immutable`. That is a trap for files
+# edited in place: the browser stops asking entirely, so a fixed site.js kept
+# being served from cache while the HTML around it had already updated. A one
+# day lifetime plus the ?v= query string on the <link>/<script> tags gives both
+# fast repeat loads and a bounded worst case if a version bump is forgotten.
+# Keep bumping ?v= when you edit site.js or site.css (see README).
 /assets/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=86400
 
+# The icon rarely changes and is tiny.
 /favicon.ico
   Cache-Control: public, max-age=604800
 
